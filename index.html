@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>Pocket CSV → LinkAce HTML</title>
-  <script src="https://cdn.jsdelivr.net/npm/csv-parse@5.5.3/dist/csv-parse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 </head>
 <body>
   <h1>Pocket CSV → LinkAce HTML Konverter</h1>
@@ -15,21 +15,11 @@
       const file = event.target.files[0];
       if (!file) return;
 
-      const reader = new FileReader();
-      reader.onload = function (e) {
-        const csvText = e.target.result;
-
-        // CSV parsen mit csv-parse
-        window.csvParse(csvText, {
-          columns: true,
-          skip_empty_lines: true,
-          trim: true
-        }, (err, records) => {
-          if (err) {
-            document.getElementById('status').textContent = 'Fehler beim Parsen der CSV-Datei.';
-            console.error(err);
-            return;
-          }
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: function (results) {
+          const records = results.data;
 
           const htmlParts = [];
           htmlParts.push(`<!DOCTYPE NETSCAPE-Bookmark-file-1>`);
@@ -39,10 +29,12 @@
           htmlParts.push(`<DL><p>`);
 
           records.forEach(b => {
-            const url = b.url || '';
-            const title = escapeHtml(b.title || url);
+            const url = b.url?.trim() || '';
+            if (!url) return;
+
+            const title = escapeHtml(b.title?.trim() || url);
             const timestamp = /^\d+$/.test(b.time_added) ? b.time_added : Math.floor(Date.now() / 1000);
-            const tags = (b.tags || '').replace(/\s+/g, ',');
+            const tags = (b.tags || '').replace(/\s+/g, ',').trim();
             htmlParts.push(`<DT><A HREF="${url}" ADD_DATE="${timestamp}" PRIVATE="0" TAGS="${tags}">${title}</A>`);
           });
 
@@ -51,10 +43,12 @@
           const htmlContent = htmlParts.join('\n');
           downloadFile('linkace-export.html', htmlContent);
           document.getElementById('status').textContent = 'Konvertierung abgeschlossen! Download startet...';
-        });
-      };
-
-      reader.readAsText(file);
+        },
+        error: function (err) {
+          console.error(err);
+          document.getElementById('status').textContent = 'Fehler beim Parsen der CSV-Datei.';
+        }
+      });
     });
 
     function escapeHtml(str) {
