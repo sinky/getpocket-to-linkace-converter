@@ -2,7 +2,8 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
-  <title>Pocket CSV zu LinkAce HTML</title>
+  <title>Pocket CSV → LinkAce HTML</title>
+  <script src="https://cdn.jsdelivr.net/npm/csv-parse@5.5.3/dist/csv-parse.min.js"></script>
 </head>
 <body>
   <h1>Pocket CSV → LinkAce HTML Konverter</h1>
@@ -17,38 +18,40 @@
       const reader = new FileReader();
       reader.onload = function (e) {
         const csvText = e.target.result;
-        const lines = csvText.trim().split('\n');
-        const headers = lines[0].split(',');
 
-        const bookmarks = lines.slice(1).map(line => {
-          const values = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/); // CSV split mit Kommaschutz
-          const entry = {};
-          headers.forEach((header, index) => {
-            entry[header.trim()] = values[index]?.trim() ?? '';
+        // CSV parsen mit csv-parse
+        window.csvParse(csvText, {
+          columns: true,
+          skip_empty_lines: true,
+          trim: true
+        }, (err, records) => {
+          if (err) {
+            document.getElementById('status').textContent = 'Fehler beim Parsen der CSV-Datei.';
+            console.error(err);
+            return;
+          }
+
+          const htmlParts = [];
+          htmlParts.push(`<!DOCTYPE NETSCAPE-Bookmark-file-1>`);
+          htmlParts.push(`<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">`);
+          htmlParts.push(`<!-- This is an automatically generated file. Do Not Edit! -->`);
+          htmlParts.push(`<TITLE>LinkAce</TITLE>`);
+          htmlParts.push(`<DL><p>`);
+
+          records.forEach(b => {
+            const url = b.url || '';
+            const title = escapeHtml(b.title || url);
+            const timestamp = /^\d+$/.test(b.time_added) ? b.time_added : Math.floor(Date.now() / 1000);
+            const tags = (b.tags || '').replace(/\s+/g, ',');
+            htmlParts.push(`<DT><A HREF="${url}" ADD_DATE="${timestamp}" PRIVATE="0" TAGS="${tags}">${title}</A>`);
           });
-          return entry;
+
+          htmlParts.push(`</DL>`);
+
+          const htmlContent = htmlParts.join('\n');
+          downloadFile('linkace-export.html', htmlContent);
+          document.getElementById('status').textContent = 'Konvertierung abgeschlossen! Download startet...';
         });
-
-        const htmlParts = [];
-        htmlParts.push(`<!DOCTYPE NETSCAPE-Bookmark-file-1>`);
-        htmlParts.push(`<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">`);
-        htmlParts.push(`<!-- This is an automatically generated file. Do Not Edit! -->`);
-        htmlParts.push(`<TITLE>LinkAce</TITLE>`);
-        htmlParts.push(`<DL><p>`);
-
-        bookmarks.forEach(b => {
-          const url = b.url || '';
-          const title = escapeHtml(b.title || url);
-          const timestamp = /^\d+$/.test(b.time_added) ? b.time_added : Math.floor(Date.now() / 1000);
-          const tags = (b.tags || '').replace(/\s+/g, ',');
-          htmlParts.push(`<DT><A HREF="${url}" ADD_DATE="${timestamp}" PRIVATE="0" TAGS="${tags}">${title}</A>`);
-        });
-
-        htmlParts.push(`</DL>`);
-
-        const htmlContent = htmlParts.join('\n');
-        downloadFile('linkace-export.html', htmlContent);
-        document.getElementById('status').textContent = 'Konvertierung abgeschlossen! Download startet...';
       };
 
       reader.readAsText(file);
